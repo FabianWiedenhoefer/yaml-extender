@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import Any, Optional
 
 from yaml_extender import yaml_loader
+# from yaml_extender.resolver.inline_loop_resolver import LOOP_KEY
 from yaml_extender.resolver.resolver import Resolver
 from yaml_extender.xyml_exception import RecursiveReferenceError, ReferenceNotFoundError, ExtYamlSyntaxError
 
 REFERENCE_REGEX = r'\{\{(.+?)(?::(.*))?\}\}'
 ARRAY_REGEX = r'(.*)?\[(\d*)\]'
 LIST_FLATTEN_CHARACTER = " "
+LOOP_KEY = "xyml.for"
 
 MAXIMUM_REFERENCE_DEPTH = 30
 
@@ -102,9 +104,15 @@ class ReferenceResolver(Resolver):
         if depth > 30:
             raise RecursiveReferenceError(value)
         new_value = value
+        count_loop_refs = 0
         # In order to store the full match the whole regex is packed into a group
-        for ref_match in ReferenceResolver.parse_references(value):
+        ref_matches = ReferenceResolver.parse_references(value)
+        for ref_match in ref_matches:
             ref = ref_match[1]
+            if ref == LOOP_KEY:
+                # an inline loop is a special reference, don't try to resolve now
+                count_loop_refs += 1
+                continue
             default_value = ref_match[2]
             if default_value is not None:
                 default_value = yaml_loader.parse_any_value(default_value.strip())
@@ -138,7 +146,8 @@ class ReferenceResolver(Resolver):
                     new_value = new_value.replace(ref_match[0], str(ref_val))
 
         if new_value == value:
-            if self.fail_on_resolve:
+            if self.fail_on_resolve and len(ref_matches) > count_loop_refs:
+                # if the amount of references is the same as amount of inline loops, its not an error
                 raise ReferenceNotFoundError(value)
             else:
                 return value

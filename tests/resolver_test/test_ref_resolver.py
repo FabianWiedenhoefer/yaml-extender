@@ -271,6 +271,18 @@ value_2: 2
 
     assert result == expected
 
+def test_skip_inline_for_loop():
+    content = yaml.safe_load("""
+array_1:
+- value: abc
+- value: xyz
+string: "{{xyml.for:i:array_1:{{i.value}}}}"
+""")
+    expected = content
+    ref_resolver = ReferenceResolver()
+    result = ref_resolver.resolve(content)
+
+    assert result == expected
 
 @patch('yaml_extender.yaml_loader.load')
 def test_sub_ref(loader_mock):
